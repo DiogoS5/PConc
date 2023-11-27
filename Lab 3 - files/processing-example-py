@@ -1,0 +1,17 @@
+from multiprocessing import Process, set_start_method
+
+line = "a string in shared memory"
+
+def f(argument):
+    print(argument, line)
+
+if __name__ == '__main__':
+    set_start_method('spawn')
+    p1 = Process(target=f, args=(1,))
+    p2 = Process(target=f, args=(2,))
+
+    p1.start()
+    p2.start()
+
+    p1.join()
+    p2.join()
