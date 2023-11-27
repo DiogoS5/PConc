@@ -8,6 +8,7 @@
 
 /* program that count unique words per letter*/
 
+//Lab3
 
 word_info * words_lists[26];
 int n_total_words;
