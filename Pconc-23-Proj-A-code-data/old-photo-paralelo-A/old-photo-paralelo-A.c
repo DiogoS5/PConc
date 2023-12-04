@@ -22,12 +22,18 @@
 
 /* the directories wher output files will be placed */
 #define OLD_IMAGE_DIR "./Old-image-dir/"
-char* directory; //input files directory
-gdImagePtr in_texture_img = read_png_file("./paper-texture.png");
 
 #define BUFFER_SIZE 100
 
-//segunda
+typedef struct{
+	char** files;
+	short num_files;
+	char* directory; //input files directory
+	gdImagePtr in_texture_img;
+} ThreadArgs;
+
+
+
 char** getFileList(char* directory, int* files_number){
     char* file_list_path = malloc(strlen(directory) + strlen("/image-list.txt") + 1);
     strcpy(file_list_path, directory);
@@ -57,8 +63,8 @@ char** getFileList(char* directory, int* files_number){
     return files;
 }
 
-void* processImage(void* file)
-{
+void* processImage(void* args)
+{	
 	/* input images */
 	gdImagePtr in_img;
 	/* output images */
@@ -67,38 +73,44 @@ void* processImage(void* file)
 	gdImagePtr out_textured_img;
 	gdImagePtr out_sepia_img;
 
-	char* filename = (char*)file;
-	printf("image %s\n", filename);
-	/* load of the input file */
-	char* full_file = malloc(sizeof(char) * (strlen(directory) + strlen(filename) + 1));
-	sprintf(full_file, "%s/%s", directory, filename); //add directory before file name
-	in_img = read_jpeg_file(full_file);
-	if (in_img == NULL)
-	{
-		fprintf(stderr, "Impossible to read %s image\n", files[i]);
-		return NULL;
+	ThreadArgs* thread_args = (ThreadArgs*)args;
+
+	for(int i=0; i<thread_args->num_files; i++){
+		printf("image %s\n", thread_args->files[i]);
+
+		/* load of the input file */
+		char* full_file = malloc(sizeof(char) * (strlen(thread_args->directory) + strlen(thread_args->files[i]) + 1));
+		sprintf(full_file, "%s/%s", thread_args->directory, thread_args->files[i]); //add directory before file name
+		in_img = read_jpeg_file(full_file);
+		if (in_img == NULL)
+		{
+			fprintf(stderr, "Impossible to read %s image\n", full_file);
+			return NULL;
+		}
+
+		out_contrast_img = contrast_image(in_img);
+		out_smoothed_img = smooth_image(out_contrast_img);
+		out_textured_img = texture_image(out_smoothed_img, thread_args->in_texture_img);
+		out_sepia_img = sepia_image(out_textured_img);
+
+		/* save resized */
+		char* out_file_name = malloc(sizeof(char) * (strlen(OLD_IMAGE_DIR) + strlen(thread_args->files[i]) + 1));
+		sprintf(out_file_name, "%s%s", OLD_IMAGE_DIR, thread_args->files[i]);
+		if (write_jpeg_file(out_sepia_img, out_file_name) == 0)
+		{
+			fprintf(stderr, "Impossible to write %s image\n", out_file_name);
+		}
+
+		gdImageDestroy(out_smoothed_img);
+		gdImageDestroy(out_sepia_img);
+		gdImageDestroy(out_contrast_img);
+		gdImageDestroy(in_img);
 	}
-
-	out_contrast_img = contrast_image(in_img);
-	out_smoothed_img = smooth_image(out_contrast_img);
-	out_textured_img = texture_image(out_smoothed_img, in_texture_img);
-	out_sepia_img = sepia_image(out_textured_img);
-
-	/* save resized */
-	char* out_file_name = malloc(sizeof(char) * (strlen(OLD_IMAGE_DIR) + strlen(filename) + 1));
-	sprintf(out_file_name, "%s%s", OLD_IMAGE_DIR, filename);
-	if (write_jpeg_file(out_sepia_img, out_file_name) == 0)
-	{
-		fprintf(stderr, "Impossible to write %s image\n", out_file_name);
-	}
-
-	gdImageDestroy(out_smoothed_img);
-	gdImageDestroy(out_sepia_img);
-	gdImageDestroy(out_contrast_img);
-	gdImageDestroy(in_img);
+	free(args);
 
 	pthread_exit(NULL);
 }
+
 
 /******************************************************************************
  * main()
@@ -127,7 +139,7 @@ int main(int argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 
-    directory = argv[1];
+    char* directory = argv[1];
     /* length of the files array (number of files to be processed	 */
     int files_number = 0;
 	/* array containg the names of files to be processed	 */
@@ -137,7 +149,7 @@ int main(int argc, char** argv)
 	
 	// num de threads pedidas é insuficiente
 	if (n_threads <= 0) {
-		printf(stderr, "Insuficient number of threads");
+		printf("Insuficient number of threads");
 		exit(EXIT_FAILURE);
 	}
 
@@ -147,28 +159,50 @@ int main(int argc, char** argv)
 			fprintf(stderr, "Impossible to create %s directory\n", OLD_IMAGE_DIR);
 			exit(-1);
 		}
-	in_texture_img = read_png_file("./paper-texture.png");
 	
+	gdImagePtr in_texture_img = read_png_file("./paper-texture.png");
+
 	/* end of seq time */
 	clock_gettime(CLOCK_MONOTONIC, &end_time_seq);
 	clock_gettime(CLOCK_MONOTONIC, &start_time_par);
 
 	pthread_t threads[n_threads];
 
+	/* defines number of files each thread should process*/
+	int files_per_thread[n_threads];
+
+	for(int i=0; i<n_threads; i++){
+		files_per_thread[i] = files_number/n_threads;
+	}
+	for(int i=0; i<files_number%n_threads; i++){
+		files_per_thread[i]++;
+	}
+
+	int file_cnt = 0;
 	for (int i=0; i<n_threads; i++)
-	{
-		if (pthread_create(&threads[i], NULL, processImage, (void*)files[i]) != NULL)
+	{	
+		ThreadArgs* args = malloc(sizeof(ThreadArgs));
+		args->files = malloc(sizeof(char*) * files_per_thread[i]);
+		for(int j=0; j<files_per_thread[i]; j++){
+			args->files[j] = files[file_cnt++];
+		}
+		args->num_files = files_per_thread[i];
+		args->directory = directory;
+		args->in_texture_img = in_texture_img;
+
+		if (pthread_create(&threads[i], NULL, processImage, (void*)args) != 0)
 		{
             fprintf(stderr, "Error creating thread for %s\n", files[i]);
 			exit(EXIT_FAILURE);
         }
 	}
+
 	// Wait for all threads to finish
-    for (int i = 0; i < files_number; ++i) 
+    for (int i = 0; i < n_threads; i++) 
 	{
         if(pthread_join(threads[i], NULL) != 0) 
 		{
-			fprintf(stderr, "Error joining thread for %s\n", files[i]);
+			fprintf(stderr, "Error joining thread %d\n", i);
 			exit(EXIT_FAILURE);
 		}
     }
