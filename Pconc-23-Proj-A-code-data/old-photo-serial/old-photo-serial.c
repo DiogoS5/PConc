@@ -93,10 +93,10 @@ int main(){
 		if(write_jpeg_file(out_sepia_img, out_file_name) == 0){
 			fprintf(stderr, "Impossible to write %s image\n", out_file_name);
 		}
-		gdImageDestroy(out_smoothed_img);
-		gdImageDestroy(out_sepia_img);
-		gdImageDestroy(out_contrast_img);
-		gdImageDestroy(in_img);
+		//gdImageDestroy(out_smoothed_img);
+		//gdImageDestroy(out_sepia_img);
+		//gdImageDestroy(out_contrast_img);
+		//gdImageDestroy(in_img);
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &end_time_par);
@@ -113,4 +113,16 @@ struct timespec total_time = diff_timespec(&end_time_total, &start_time_total);
 
 	exit(0);
 }
-
+/*
+ HEAP SUMMARY:
+==4164==     in use at exit: 265,793,708 bytes in 24,806 blocks
+==4164==   total heap usage: 169,143 allocs, 144,337 frees, 2,113,257,018 bytes allocated
+==4164== 
+==4164== LEAK SUMMARY:
+==4164==    definitely lost: 66,024 bytes in 9 blocks
+==4164==    indirectly lost: 239,050,952 bytes in 21,986 blocks
+==4164==      possibly lost: 79,660 bytes in 7 blocks
+==4164==    still reachable: 26,597,072 bytes in 2,804 blocks
+==4164==         suppressed: 0 bytes in 0 blocks
+==4164== Rerun with --leak-check=full to see details of leaked memory
+*/
