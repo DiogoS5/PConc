@@ -19,6 +19,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <unistd.h>
 
 /* the directories wher output files will be placed */
 #define OLD_IMAGE_DIR "./Old-image-dir/"
@@ -78,16 +79,37 @@ void* processImage(void* args)
 	for(int i=0; i<thread_args->num_files; i++){
 		printf("image %s\n", thread_args->files[i]);
 
+		/* Verifying existance of file in directory */
+		char *verif_name = malloc(sizeof(char)*(strlen(OLD_IMAGE_DIR) + strlen(thread_args->files[i]) + 1)); //allocate memory for full name
+		//verificação do malloc
+		if (verif_name == NULL){
+			printf("Error allocating memory for verif_name\n");
+			exit(EXIT_FAILURE);
+		}
+		// filename with directory
+		sprintf(verif_name, "%s%s", OLD_IMAGE_DIR, thread_args->files[i]);
+		
+		if(access(verif_name, F_OK) != -1) // verificar se existe
+		{
+			// o ficheiro existe, vamos saltar este processamento
+			printf("Processed photo (%s) already exists.\n" , thread_args->files[i]);
+			free(verif_name);
+			continue;
+		}
+
 		/* load of the input file */
 		char* full_file = malloc(sizeof(char) * (strlen(thread_args->directory) + strlen(thread_args->files[i]) + 1));
 		sprintf(full_file, "%s/%s", thread_args->directory, thread_args->files[i]); //add directory before file name
+
 		in_img = read_jpeg_file(full_file);
 		if (in_img == NULL)
 		{
-			fprintf(stderr, "Impossible to read %s image\n", full_file);
-			return NULL;
+			free(verif_name);
+			free(full_file);
+			continue;
 		}
 
+		/* create processed image versions*/
 		out_contrast_img = contrast_image(in_img);
 		out_smoothed_img = smooth_image(out_contrast_img);
 		out_textured_img = texture_image(out_smoothed_img, thread_args->in_texture_img);
@@ -134,8 +156,8 @@ int main(int argc, char** argv)
 	clock_gettime(CLOCK_MONOTONIC, &start_time_seq);
 
 	// n insuficiente de argumentos na comm line
-	if (argc < 2) {
-		fprintf(stderr, "Insuficient number of arguments");
+	if (argc < 3) {
+		fprintf(stderr, "Insuficient number of arguments\n");
 		exit(EXIT_FAILURE);
 	}
 
