@@ -76,7 +76,12 @@ void* processImage(void* args)
 
 	ThreadArgs* thread_args = (ThreadArgs*)args;
 
-	for(int i=0; i<thread_args->num_files; i++){
+	for(int i=0; i<thread_args->num_files; i++)
+	{
+		//ínício da contagem do tempo de cada thread
+		struct timespec start_time_thread, end_time_thread;
+		clock_gettime(CLOCK_MONOTONIC, &start_time_thread);
+
 		printf("image %s\n", thread_args->files[i]);
 
 		/* Verifying existance of file in directory */
@@ -148,32 +153,44 @@ void* processImage(void* args)
  *****************************************************************************/
 int main(int argc, char** argv)
 {
+	char* directory = argv[1];
+	int n_threads = atoi(argv[2]);
+
 	struct timespec start_time_total, end_time_total;
 	struct timespec start_time_seq, end_time_seq;
 	struct timespec start_time_par, end_time_par;
+	struct timespec start_time_threads[n_threads], end_time_threads[n_threads];
 
 	clock_gettime(CLOCK_MONOTONIC, &start_time_total);
 	clock_gettime(CLOCK_MONOTONIC, &start_time_seq);
 
-	// n insuficiente de argumentos na comm line
+	// Wrong number of arguments
 	if (argc < 3) {
-		fprintf(stderr, "Insuficient number of arguments\n");
+		fprintf(stderr, "Wrong number of arguments\n");
+		exit(EXIT_FAILURE);
+	}
+	// Insuficient number of threads
+	if (n_threads <= 0) {
+		printf("Insuficient number of threads");
 		exit(EXIT_FAILURE);
 	}
 
-    char* directory = argv[1];
     /* length of the files array (number of files to be processed	 */
     int files_number = 0;
 	/* array containg the names of files to be processed	 */
 	char **files = getFileList(directory, &files_number);
 
-	int n_threads = atoi(argv[2]);
+	FILE* timing_file;
 	
-	// num de threads pedidas é insuficiente
-	if (n_threads <= 0) {
-		printf("Insuficient number of threads");
-		exit(EXIT_FAILURE);
-	}
+	/* timing file path */
+	char timing_path[40];
+    sprintf(timing_path, "%stiming_%d.txt", OLD_IMAGE_DIR, n_threads);
+    timing_file = fopen(timing_path, "w");
+    
+	if (timing_file == NULL) { //verification
+        fprintf(stderr, "Error opening timing file for writing\n");
+        exit(EXIT_FAILURE);
+    }
 
 	/* creation of output directories */
 	if (create_directory(OLD_IMAGE_DIR) == 0)
@@ -182,11 +199,22 @@ int main(int argc, char** argv)
 			exit(-1);
 		}
 	
-	gdImagePtr in_texture_img = read_png_file("./paper-texture.png");
-
-	/* end of seq time */
-	clock_gettime(CLOCK_MONOTONIC, &end_time_seq);
-	clock_gettime(CLOCK_MONOTONIC, &start_time_par);
+	gdImagePtr in_texture_img;
+	if(access("./paper-texture.png", F_OK) != -1){
+		in_texture_img = read_png_file("./paper-texture.png");
+	}
+	else{
+		char* texture_path = malloc(sizeof(char) * (strlen(directory) + strlen("/paper-texture.png") + 1));
+		sprintf(texture_path, "%s/paper-texture.png", directory);
+		if(access(texture_path, F_OK) != -1){
+			in_texture_img = read_png_file(texture_path);
+		}
+		else{
+			fprintf(stderr, "Impossible to find paper-texture.png\n");
+			exit(EXIT_FAILURE);
+		}
+		free(texture_path);
+	}
 
 	pthread_t threads[n_threads];
 
@@ -201,6 +229,11 @@ int main(int argc, char** argv)
 	}
 
 	int file_cnt = 0;
+
+	/* end of seq time, start of par time */
+	clock_gettime(CLOCK_MONOTONIC, &end_time_seq);
+	clock_gettime(CLOCK_MONOTONIC, &start_time_par);
+
 	for (int i=0; i<n_threads; i++)
 	{	
 		ThreadArgs* args = malloc(sizeof(ThreadArgs));
@@ -211,6 +244,8 @@ int main(int argc, char** argv)
 		args->num_files = files_per_thread[i];
 		args->directory = directory;
 		args->in_texture_img = in_texture_img;
+
+		clock_gettime(CLOCK_MONOTONIC, &start_time_threads[i]);
 
 		if (pthread_create(&threads[i], NULL, processImage, (void*)args) != 0)
 		{
@@ -227,6 +262,8 @@ int main(int argc, char** argv)
 			fprintf(stderr, "Error joining thread %d\n", i);
 			exit(EXIT_FAILURE);
 		}
+
+		clock_gettime(CLOCK_MONOTONIC, &end_time_threads[i]);
     }
 
 	clock_gettime(CLOCK_MONOTONIC, &end_time_par);
@@ -238,6 +275,15 @@ int main(int argc, char** argv)
 	printf("\tseq \t %10jd.%09ld\n", seq_time.tv_sec, seq_time.tv_nsec);
 	printf("\tpar \t %10jd.%09ld\n", par_time.tv_sec, par_time.tv_nsec);
 	printf("total \t %10jd.%09ld\n", total_time.tv_sec, total_time.tv_nsec);
+	
+	fprintf(timing_file, "total \t %10jd.%02ld\n", total_time.tv_sec, total_time.tv_nsec);
+	for (int i = 0; i < n_threads; i++) 
+	{
+		struct timespec thread_time = diff_timespec(&end_time_threads[i], &start_time_threads[i]);
+		printf("Thread_%d: \t %10jd.%09ld\n", i, thread_time.tv_sec, thread_time.tv_nsec);
+		fprintf(timing_file, "Thread_%d	\t %jd.%09ld\n", i, thread_time.tv_sec, thread_time.tv_nsec);
+	}
+	fclose(timing_file);
 
 	exit(0);
 }
