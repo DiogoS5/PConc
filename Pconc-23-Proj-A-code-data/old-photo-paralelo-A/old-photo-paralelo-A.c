@@ -284,16 +284,12 @@ int main(int argc, char** argv)
 	struct timespec par_time = diff_timespec(&end_time_par, &start_time_par);
 	struct timespec seq_time = diff_timespec(&end_time_seq, &start_time_seq);
 	struct timespec total_time = diff_timespec(&end_time_total, &start_time_total);
-	printf("\tseq \t %10jd.%09ld\n", seq_time.tv_sec, seq_time.tv_nsec);
-	printf("\tpar \t %10jd.%09ld\n", par_time.tv_sec, par_time.tv_nsec);
-	printf("total \t %10jd.%09ld\n", total_time.tv_sec, total_time.tv_nsec);
 	
-	fprintf(timing_file, "total \t %10jd.%02ld\n", total_time.tv_sec, total_time.tv_nsec);
+	fprintf(timing_file, "total     %d %2jd.%09ld\n", files_number, total_time.tv_sec, total_time.tv_nsec);
 	for (int i = 0; i < n_threads; i++) 
 	{
 		struct timespec thread_time = diff_timespec(&end_time_threads[i], &start_time_threads[i]);
-		printf("Thread_%d: \t %10jd.%09ld\n", i, thread_time.tv_sec, thread_time.tv_nsec);
-		fprintf(timing_file, "Thread_%d	\t %jd.%09ld\n", i, thread_time.tv_sec, thread_time.tv_nsec);
+		fprintf(timing_file, "Thread_%d   %d %2jd.%09ld\n", i, files_per_thread[i], thread_time.tv_sec, thread_time.tv_nsec);
 	}
 
 	free(files);
