@@ -175,6 +175,13 @@ int main(int argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 
+	/* creation of output directories */
+	if (create_directory(OLD_IMAGE_DIR) == 0)
+	{
+		fprintf(stderr, "Impossible to create %s directory\n", OLD_IMAGE_DIR);
+		exit(-1);
+	}
+	
     /* length of the files array (number of files to be processed	 */
     int files_number = 0;
 	/* array containg the names of files to be processed	 */
@@ -192,12 +199,7 @@ int main(int argc, char** argv)
         exit(EXIT_FAILURE);
     }
 
-	/* creation of output directories */
-	if (create_directory(OLD_IMAGE_DIR) == 0)
-		{
-			fprintf(stderr, "Impossible to create %s directory\n", OLD_IMAGE_DIR);
-			exit(-1);
-		}
+	
 	
 	gdImagePtr in_texture_img;
 	if(access("./paper-texture.png", F_OK) != -1){
