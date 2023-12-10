@@ -68,6 +68,7 @@ char** getFileList(char* directory, int* files_number){
 
         (*files_number)++;
     }
+	//frees
     free(buffer);
     fclose(file_list);
 
@@ -91,14 +92,10 @@ void* processImage(void* args)
 	gdImagePtr out_textured_img;
 	gdImagePtr out_sepia_img;
 
-	ThreadArgs* thread_args = (ThreadArgs*)args;
+	ThreadArgs* thread_args = (ThreadArgs*)args; //cast void* to ThreadArgs*
 
-	for(int i=0; i<thread_args->num_files; i++)
+	for(int i=0; i<thread_args->num_files; i++) 
 	{
-		//ínício da contagem do tempo de cada thread
-		struct timespec start_time_thread, end_time_thread;
-		clock_gettime(CLOCK_MONOTONIC, &start_time_thread);
-
 		printf("image %s\n", thread_args->files[i]);
 
 		/* Verifying existance of file in directory */
@@ -156,18 +153,14 @@ void* processImage(void* args)
 }
 
 
-/******************************************************************************
- * main()
+
+/**
+ * @brief The main function of the program.
  *
- * Arguments: (none)
- * Returns: 0 in case of sucess, positive number in case of failure
- * Side-Effects: creates thumbnail, resized copy and watermarked copies
- *               of images
- *
- * Description: implementation of the complex serial version
- *              This application only works for a fixed pre-defined set of files
- *
- *****************************************************************************/
+ * @param argc The number of command-line arguments.
+ * @param argv An array of strings containing the command-line arguments.
+ * @return The exit status of the program.
+ */
 int main(int argc, char** argv)
 {
 	char* directory = argv[1];
