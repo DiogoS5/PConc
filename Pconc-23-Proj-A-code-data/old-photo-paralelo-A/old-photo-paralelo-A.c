@@ -5,7 +5,7 @@
  * Projecto - Parte1
  *                           serial-complexo.c
  *
- * Compilacao: gcc serial-complexo -o serial-complex -lgd
+ * Compilacao: make
  *
  *****************************************************************************/
 
@@ -59,14 +59,18 @@ char** getFileList(char* directory, int* files_number){
     char** files = malloc(sizeof(char*)); //initialize array of files
 
     while(fgets(buffer, BUFFER_SIZE, file_list) != NULL){
-        buffer[strcspn(buffer, "\n")] = 0; //remove newline character
+        buffer[strcspn(buffer, "\n")] = 0;
 
-        char* file = strdup(buffer); //duplicate buffer string
-        files = realloc(files, (*files_number + 1) * sizeof(char *)); //increase the size of the array
-
-        files[*files_number] = file; // add file to array
-
-        (*files_number)++;
+		size_t len = strlen(buffer);
+        if ((len >= 5 && (strcasecmp(&buffer[len-5], ".jpeg") == 0 || strcasecmp(&buffer[len-4], ".jpg") == 0))) //verifying extension
+		{
+			char* file = strdup(buffer);
+        	files = realloc(files, (*files_number + 1) * sizeof(char *)); //increase the size of the array
+        	files[*files_number] = file; // Add file to array
+        	(*files_number)++;
+		} else {
+			printf("File <%s> ignored - Invalid extension\n", buffer);
+		} 
     }
 	//frees
     free(buffer);
@@ -100,7 +104,7 @@ void* processImage(void* args)
 
 		/* Verifying existance of file in directory */
 		char *verif_name = malloc(sizeof(char)*(strlen(OLD_IMAGE_DIR) + strlen(thread_args->files[i]) + 1)); //allocate memory for full name
-		//verificação do malloc
+		//verification
 		if (verif_name == NULL){
 			printf("Error allocating memory for verif_name\n");
 			exit(EXIT_FAILURE);
@@ -108,19 +112,19 @@ void* processImage(void* args)
 		// filename with directory
 		sprintf(verif_name, "%s%s", OLD_IMAGE_DIR, thread_args->files[i]);
 		
-		if(access(verif_name, F_OK) != -1) // verificar se existe
+		if(access(verif_name, F_OK) != -1) // verify if file exists
 		{
-			// o ficheiro existe, vamos saltar este processamento
 			printf("Processed photo (%s) already exists.\n" , thread_args->files[i]);
 			free(verif_name);
-			continue;
+			continue; //skip to next image
 		}
 
-		/* load of the input file */
+		/* Reading input file */
 		char* full_file = malloc(sizeof(char) * (strlen(thread_args->directory) + strlen(thread_args->files[i]) + 1));
 		sprintf(full_file, "%s/%s", thread_args->directory, thread_args->files[i]); //add directory before file name
 
-		in_img = read_jpeg_file(full_file);
+		in_img = read_jpeg_file(full_file); //read file
+		//verify reading
 		if (in_img == NULL)
 		{
 			free(verif_name);
@@ -136,12 +140,14 @@ void* processImage(void* args)
 
 		/* save resized */
 		char* out_file_name = malloc(sizeof(char) * (strlen(OLD_IMAGE_DIR) + strlen(thread_args->files[i]) + 1));
-		sprintf(out_file_name, "%s%s", OLD_IMAGE_DIR, thread_args->files[i]);
+		sprintf(out_file_name, "%s%s", OLD_IMAGE_DIR, thread_args->files[i]); //add directory to path
+		//write and verify
 		if (write_jpeg_file(out_sepia_img, out_file_name) == 0)
 		{
 			fprintf(stderr, "Impossible to write %s image\n", out_file_name);
 		}
 
+		//free unnecessary images
 		gdImageDestroy(out_smoothed_img);
 		gdImageDestroy(out_sepia_img);
 		gdImageDestroy(out_contrast_img);
@@ -163,14 +169,17 @@ void* processImage(void* args)
  */
 int main(int argc, char** argv)
 {
+	//Store command-line arguments	
 	char* directory = argv[1];
 	int n_threads = atoi(argv[2]);
 
+	// Timing variables
 	struct timespec start_time_total, end_time_total;
 	struct timespec start_time_seq, end_time_seq;
 	struct timespec start_time_par, end_time_par;
 	struct timespec start_time_threads[n_threads], end_time_threads[n_threads];
 
+	//Start total and seq times
 	clock_gettime(CLOCK_MONOTONIC, &start_time_total);
 	clock_gettime(CLOCK_MONOTONIC, &start_time_seq);
 
@@ -185,21 +194,15 @@ int main(int argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 
-	/* creation of output directories */
+	/* creation of output directory */
 	if (create_directory(OLD_IMAGE_DIR) == 0)
 	{
 		fprintf(stderr, "Impossible to create %s directory\n", OLD_IMAGE_DIR);
 		exit(-1);
 	}
 
-    /* length of the files array (number of files to be processed	 */
-    int files_number = 0;
-	/* array containg the names of files to be processed	 */
-	char **files = getFileList(directory, &files_number);
-
+	/* Opening timing_file */
 	FILE* timing_file;
-	
-	/* timing file path */
 	char timing_path[40];
     sprintf(timing_path, "%stiming_%d.txt", OLD_IMAGE_DIR, n_threads);
     timing_file = fopen(timing_path, "w");
@@ -209,8 +212,7 @@ int main(int argc, char** argv)
         exit(EXIT_FAILURE);
     }
 
-	
-	
+	/* Read texture image */
 	gdImagePtr in_texture_img;
 	if(access("./paper-texture.png", F_OK) != -1){
 		in_texture_img = read_png_file("./paper-texture.png");
@@ -228,9 +230,11 @@ int main(int argc, char** argv)
 		free(texture_path);
 	}
 
-	pthread_t threads[n_threads];
+	int files_number = 0; //number of files to be processed
+	char **files = getFileList(directory, &files_number); //array containg the names of files to be processed
+	pthread_t threads[n_threads]; //array of threads
 
-	/* defines number of files each thread should process*/
+	/* Define number of files each thread should process*/
 	int files_per_thread[n_threads];
 
 	for(int i=0; i<n_threads; i++){
@@ -240,16 +244,18 @@ int main(int argc, char** argv)
 		files_per_thread[i]++;
 	}
 
-	int file_cnt = 0;
+	int file_cnt = 0; //counter for file distribution
 
 	/* end of seq time, start of par time */
 	clock_gettime(CLOCK_MONOTONIC, &end_time_seq);
 	clock_gettime(CLOCK_MONOTONIC, &start_time_par);
 
+	/* Start threads */
 	for (int i=0; i<n_threads; i++)
 	{	
 		ThreadArgs* args = malloc(sizeof(ThreadArgs));
 		args->files = malloc(sizeof(char*) * files_per_thread[i]);
+		//define arguments
 		for(int j=0; j<files_per_thread[i]; j++){
 			args->files[j] = files[file_cnt++];
 		}
@@ -257,7 +263,7 @@ int main(int argc, char** argv)
 		args->directory = directory;
 		args->in_texture_img = in_texture_img;
 
-		clock_gettime(CLOCK_MONOTONIC, &start_time_threads[i]);
+		clock_gettime(CLOCK_MONOTONIC, &start_time_threads[i]); //start time for each thread
 
 		if (pthread_create(&threads[i], NULL, processImage, (void*)args) != 0)
 		{
@@ -275,16 +281,18 @@ int main(int argc, char** argv)
 			exit(EXIT_FAILURE);
 		}
 
-		clock_gettime(CLOCK_MONOTONIC, &end_time_threads[i]);
+		clock_gettime(CLOCK_MONOTONIC, &end_time_threads[i]); //end time for each thread
     }
 
 	clock_gettime(CLOCK_MONOTONIC, &end_time_par);
 	clock_gettime(CLOCK_MONOTONIC, &end_time_total);
 
+	/* Calculate times*/
 	struct timespec par_time = diff_timespec(&end_time_par, &start_time_par);
 	struct timespec seq_time = diff_timespec(&end_time_seq, &start_time_seq);
 	struct timespec total_time = diff_timespec(&end_time_total, &start_time_total);
 	
+	/* Print times to file */
 	fprintf(timing_file, "total     %d %2jd.%09ld\n", files_number, total_time.tv_sec, total_time.tv_nsec);
 	for (int i = 0; i < n_threads; i++) 
 	{
