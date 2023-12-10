@@ -24,8 +24,9 @@
 /* the directories wher output files will be placed */
 #define OLD_IMAGE_DIR "./Old-image-dir/"
 
-#define BUFFER_SIZE 100
+#define BUFFER_SIZE 100 //size of the buffer used to read the file list
 
+/* Structure containing the variables needed for the thread function */
 typedef struct{
 	char** files;
 	short num_files;
@@ -34,27 +35,36 @@ typedef struct{
 } ThreadArgs;
 
 
-
+/**
+ * @brief Retrieves the list of files from the user specified directory.
+ *
+ * @param directory The directory path.
+ * @param files_number Pointer to an integer to store the number of files found.
+ * @return An array of strings containing the file names.
+ */
 char** getFileList(char* directory, int* files_number){
-    char* file_list_path = malloc(strlen(directory) + strlen("/image-list.txt") + 1);
-    strcpy(file_list_path, directory);
-    strcat(file_list_path, "/image-list.txt");
+
+    char* file_list_path = malloc(strlen(directory) + strlen("/image-list.txt") + 1); //allocate memory for full path
+    strcpy(file_list_path, directory); //copy directory path to full path
+    strcat(file_list_path, "/image-list.txt"); //copy file name to full path
+
     FILE* file_list = fopen(file_list_path, "r");
+	//verify if file is correctly opened 
     if (file_list == NULL) {
         perror("Error opening file");
         exit(EXIT_FAILURE);
     }
 
     char* buffer = malloc(BUFFER_SIZE*sizeof(char));
-    char** files = malloc(sizeof(char*));
+    char** files = malloc(sizeof(char*)); //initialize array of files
 
     while(fgets(buffer, BUFFER_SIZE, file_list) != NULL){
-        buffer[strcspn(buffer, "\n")] = 0;
+        buffer[strcspn(buffer, "\n")] = 0; //remove newline character
 
-        char* file = strdup(buffer);
+        char* file = strdup(buffer); //duplicate buffer string
         files = realloc(files, (*files_number + 1) * sizeof(char *)); //increase the size of the array
 
-        files[*files_number] = file; // Add file to array
+        files[*files_number] = file; // add file to array
 
         (*files_number)++;
     }
@@ -64,6 +74,13 @@ char** getFileList(char* directory, int* files_number){
     return files;
 }
 
+
+/**
+ * @brief Processes the input images assigned to a thread.
+ * 
+ * @param args Pointer to the ThreadArgs structure containing the variables needed for te function.
+ * @return void
+ */
 void* processImage(void* args)
 {	
 	/* input images */
@@ -181,7 +198,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Impossible to create %s directory\n", OLD_IMAGE_DIR);
 		exit(-1);
 	}
-	
+
     /* length of the files array (number of files to be processed	 */
     int files_number = 0;
 	/* array containg the names of files to be processed	 */
@@ -285,6 +302,8 @@ int main(int argc, char** argv)
 		printf("Thread_%d: \t %10jd.%09ld\n", i, thread_time.tv_sec, thread_time.tv_nsec);
 		fprintf(timing_file, "Thread_%d	\t %jd.%09ld\n", i, thread_time.tv_sec, thread_time.tv_nsec);
 	}
+
+	free(files);
 	fclose(timing_file);
 
 	exit(0);
